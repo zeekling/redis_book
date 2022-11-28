@@ -52,7 +52,7 @@ Redis使用字节数组表示一个压缩列表，压缩列表结构如下所示
  - `<4 bytes unsigned little endian prevlen>`: 当前节点的实际长度（4 字节）
  - `<encoding>`: 当前节点的实际数据类型以及长度
  - `<entry>`: 当前节点的实际数据
- 
+
 压缩列表元素编码：
 
 | encoding编码 | encoding 长度 |context类型 |
@@ -83,8 +83,75 @@ Redis 常见的encoding：
 #define ZIP_INT_8B 0xfe
 ```
 
-## 结构体
+## 解码结构体
+对于压缩列表中的任意元素，获取前一个元素的长度、判断存储的数据类型、获取数据内容等都需要经过复杂的解码运算。解码后的结果应该被缓存起来，为此定义了结构体zlentry，用于表示解码后的压缩列表元素，单纯的用来临时存储解码之后的元素信息。
+
+```c
+typedef struct zlentry {
+    unsigned int prevrawlensize;
+    unsigned int prevrawlen;
+    unsigned int lensize;
+    unsigned int len;
+    unsigned int headersize;
+    unsigned char encoding;
+    unsigned char *p;
+} zlentry;
+```
+
+- prevrawlensize: 存储下面 prevrawlen 所需要的字节数
+- prevrawlen: 存储前一个节点的字节长度
+- len: 存储当前节点的字节长度
+- headersize: prevrawlensize + lensize 当前节点的头部字节，其实是 prevlen + encoding 两项占用的字节数
+- encoding: 存储当前节点的数据编码格式
+- p: 指向当前节点开头第一个字节的指针
+
+函数zipEntry用来解码压缩列表的元素，填充为zlentry结构体。
+
+```c
+static inline void zipEntry(unsigned char *p, zlentry *e) {
+    ZIP_DECODE_PREVLEN(p, e->prevrawlensize, e->prevrawlen);
+    ZIP_ENTRY_ENCODING(p + e->prevrawlensize, e->encoding);
+    ZIP_DECODE_LENGTH(p + e->prevrawlensize, e->encoding, e->lensize, e->len);
+    assert(e->lensize != 0);
+    e->headersize = e->prevrawlensize + e->lensize;
+    e->p = p;
+}
+```
+
+解码主要分为下面几个步骤：
+
+### 解码前节点长度
+根据 p 目前的指针，获取 entry 的 prevlen 的值；
+- 如果prevlen一个字节编码，对应字节 (ptr)[0] 的值就是 prevlen。
+- 如果prevlen五个字节编码，具体的 prevlen 是存储在后四个字节，后四个字节进行位运算获得实际的 prevlen
+
+```c
+#define ZIP_DECODE_PREVLEN(ptr, prevlensize, prevlen) do {                     \
+    ZIP_DECODE_PREVLENSIZE(ptr, prevlensize);                                  \
+    if ((prevlensize) == 1) {                                                  \
+        (prevlen) = (ptr)[0];                                                  \
+    } else { /* prevlensize == 5 */                                            \
+        (prevlen) = ((ptr)[4] << 24) |                                         \
+                    ((ptr)[3] << 16) |                                         \
+                    ((ptr)[2] <<  8) |                                         \
+                    ((ptr)[1]);                                                \
+    }                                                                          \
+} while(0)
+```
+根据prevlensize的长度判断prevlen的长度，如果`(ptr)[0] < ZIP_BIG_PREVLEN`时（ZIP_BIG_PREVLEN=254），则prevlen长度为1，否则长度为5。
+```c
+  #define ZIP_DECODE_PREVLENSIZE(ptr, prevlensize) do {                          \
+    if ((ptr)[0] < ZIP_BIG_PREVLEN) {                                            \
+        (prevlensize) = 1;                                                       \
+    } else {                                                                     \
+        (prevlensize) = 5;                                                       \
+    }                                                                            \
+  } while(0)
+```
+
+### 解码encoding
 
 
+### 解码长度
 
 
