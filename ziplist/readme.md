@@ -160,6 +160,10 @@ p+prevrawlensize 位置的第一个字节，获取 entry 当前的 encoding 属�
 
 ### 解码长度
 p+prevrawlensize 根据 encoding 获取 entry 的 len 相关属性。 `ptr[0]<11000000`说明是字节数组，前两个比特为字节数组编码类型
+
+> 进制转换：echo "ibase=16;obase=2;C0" | bc
+> 
+
 ```c
 #define ZIP_DECODE_LENGTH(ptr, encoding, lensize, len) do {                    \
     if ((encoding) < ZIP_STR_MASK) {                                           \
