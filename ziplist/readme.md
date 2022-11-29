@@ -150,8 +150,47 @@ static inline void zipEntry(unsigned char *p, zlentry *e) {
 ```
 
 ### 解码encoding
-
+p+prevrawlensize 位置的第一个字节，获取 entry 当前的 encoding 属性，保存在 encoding 变量中时间复杂度 O(1)。
+```c
+#define ZIP_ENTRY_ENCODING(ptr, encoding) do {  \
+    (encoding) = ((ptr)[0]); \
+    if ((encoding) < ZIP_STR_MASK) (encoding) &= ZIP_STR_MASK; \
+} while(0)
+```
 
 ### 解码长度
-
+p+prevrawlensize 根据 encoding 获取 entry 的 len 相关属性。 `ptr[0]<11000000`说明是字节数组，前两个比特为字节数组编码类型
+```c
+#define ZIP_DECODE_LENGTH(ptr, encoding, lensize, len) do {                    \
+    if ((encoding) < ZIP_STR_MASK) {                                           \
+        if ((encoding) == ZIP_STR_06B) {                                       \
+            (lensize) = 1;                                                     \
+            (len) = (ptr)[0] & 0x3f;                                           \
+        } else if ((encoding) == ZIP_STR_14B) {                                \
+            (lensize) = 2;                                                     \
+            (len) = (((ptr)[0] & 0x3f) << 8) | (ptr)[1];                       \
+        } else if ((encoding) == ZIP_STR_32B) {                                \
+            (lensize) = 5;                                                     \
+            (len) = ((uint32_t)(ptr)[1] << 24) |                               \
+                    ((uint32_t)(ptr)[2] << 16) |                               \
+                    ((uint32_t)(ptr)[3] <<  8) |                               \
+                    ((uint32_t)(ptr)[4]);                                      \
+        } else {                                                               \
+            (lensize) = 0;                                                     \
+            (len) = 0;                                                         \
+        }                                                                      \
+    } else {                                                                   \
+        (lensize) = 1;                                                         \
+        if ((encoding) == ZIP_INT_8B)  (len) = 1;                              \
+        else if ((encoding) == ZIP_INT_16B) (len) = 2;                         \
+        else if ((encoding) == ZIP_INT_24B) (len) = 3;                         \
+        else if ((encoding) == ZIP_INT_32B) (len) = 4;                         \
+        else if ((encoding) == ZIP_INT_64B) (len) = 8;                         \
+        else if (encoding >= ZIP_INT_IMM_MIN && encoding <= ZIP_INT_IMM_MAX)   \
+            (len) = 0;                                                         \
+        else                                                                   \
+            (lensize) = (len) = 0;                                             \
+    }                                                                          \
+} while(0)
+```
 
