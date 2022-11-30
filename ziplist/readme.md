@@ -198,3 +198,52 @@ p+prevrawlensize 根据 encoding 获取 entry 的 len 相关属性。 `ptr[0]<11
 } while(0)
 ```
 
+## 基本操作
+
+主要介绍压缩列表的基本操作，包括创建压缩列表，遍历元素，插入元素，删除元素，修改元素等。
+
+### 创建压缩列表
+
+创建一个空的压缩列表:只对 `lbytes、zltail、zllen、zlend`四个字段进行初始化。初始化过程如下：
+- 计算空ziplist的长度并且申请内存，`zlbytes`和`zltail`的类型是32位无符号整数，`zllen`是16位无符号整数，所以总长度为：`zlbytes(4) + zltail(4) + zllen(2) = 10 bytes`
+- 将总字节数写入内存。zl 既为 ziplist 的起始地址，其中值又负责记录 ziplist 的总字节长度，zlbytes 编码存储固定 4 字节，也就代表了一个 ziplist 总字节最大为为 (2^32)-1 字节。
+- 将到尾节点的偏移量写进内存，因为是刚初始化的 ziplist，偏移量其实就是 HEADER_SIZE 值，此时它刚好指向 zlend，因此能够以 O(1) 时间复杂度快速在尾部进行 push 或 pop 操作。
+- 写入节点数量：0
+- 最后一个字节设置为 ZIP_END，标识 ziplist 结尾。
+
+实现代码如下：
+
+```c
+unsigned char *ziplistNew(void) {
+    unsigned int bytes = ZIPLIST_HEADER_SIZE+ZIPLIST_END_SIZE;
+    unsigned char *zl = zmalloc(bytes);
+    ZIPLIST_BYTES(zl) = intrev32ifbe(bytes);
+    ZIPLIST_TAIL_OFFSET(zl) = intrev32ifbe(ZIPLIST_HEADER_SIZE);
+    ZIPLIST_LENGTH(zl) = 0;
+    zl[bytes-1] = ZIP_END;
+    return zl;
+}
+```
+
+### 插入元素
+
+压缩列表实现函数如下,其中：
+- zl：压缩列表。
+- p: 元素插入位置
+- s: 插入元素内容
+- slen: 元素数据长度。
+
+```c
+unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned char *s, unsigned int slen)
+```
+插入元素可以简要分为3个步骤：① 将元素内容编码；② 重新分配空间；③ 复制数据。
+
+#### 编码
+编码就是计算prelen字段，encoding字段和content内容。
+
+
+### 删除元素
+
+
+### 遍历元素
+
