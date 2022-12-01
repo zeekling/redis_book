@@ -238,8 +238,18 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
 ```
 插入元素可以简要分为3个步骤：① 将元素内容编码；② 重新分配空间；③ 复制数据。
 
+
 #### 编码
-编码就是计算prelen字段，encoding字段和content内容。
+编码就是计算前节点的prelen字段，encoding字段和content字段的内容。计算prelen的前提条件就是明确元素的插入位置。
+元素的插入位置主要包含两种情况：
+- 元素插入到中间位置。
+- 元素插入到末尾。
+
+##### 元素插入到中间位置
+
+
+##### 元素插入到末尾
+
 
 
 ### 删除元素
