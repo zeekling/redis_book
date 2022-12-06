@@ -284,7 +284,42 @@ reqlen += zipStoreEntryEncoding(NULL,encoding,slen);
 
 ### 重新分配空间
 
-当向ziplist中插入数据时，空间变化下面几种可能：
+当元素不是在尾部插入时，我们需要确保插入位置的后一个节点有足够的空间来保存新插入节点的长度，即保证后节点的prevlen足够，例如，
+AC插入后变成ABC，我们需要跟新C节点的prevlen信息。计算方法如下：
+
+```c
+nextdiff = (p[0] != ZIP_END) ? zipPrevLenByteDiff(p,reqlen) :0；
+```
+nextdiff 的值代表的含义如下: 
+- 0 ：空间相等（刚好，不需要扩展）；
+- 4 ：需要更多空间（需要扩展）。
+- -4 空间富余（可以缩容）
+
+函数`zipPrevLenByteDiff`实现如下：
+
+```c
+int zipPrevLenByteDiff(unsigned char *p, unsigned int len) {
+    unsigned int prevlensize;
+    ZIP_DECODE_PREVLENSIZE(p, prevlensize);
+    return zipStorePrevEntryLength(NULL, len) - prevlensize;
+}
+```
+
+内存空间分配使用`memmove`函数实现：
+```c
+memmove(p+reqlen,p-nextdiff,curlen-offset-1+nextdiff);
+```
+当空间富裕且下一个节点的pevlen使用一个字节存储长度时，需要防止出现大量的连锁跟新，后一个节点的prevlen不能直接缩成1，
+还是需要使用4个字节保存。保存新插入节点的长度到后一节点的代码如下：
+
+```c
+if (forcelarge)
+  zipStorePrevEntryLengthLarge(p+reqlen,reqlen);
+else
+  zipStorePrevEntryLength(p+reqlen,reqlen);
+```
+
+### 数据复制
 
 
 
