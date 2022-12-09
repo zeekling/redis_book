@@ -305,6 +305,7 @@ int zipPrevLenByteDiff(unsigned char *p, unsigned int len) {
 }
 ```
 
+### 数据复制
 内存空间分配使用`memmove`函数实现：
 ```c
 memmove(p+reqlen,p-nextdiff,curlen-offset-1+nextdiff);
@@ -318,10 +319,15 @@ if (forcelarge)
 else
   zipStorePrevEntryLength(p+reqlen,reqlen);
 ```
-
-### 数据复制
-
-
+维护 zltail, 将新插入的节点长度算到zltail里面，如果 nextdiff == 4 > 0，说明后个节点的 prevSize 其实变大了的，
+也需要把这部分增加落实到 zltail 算在偏移量里，这样才能真的对齐表尾节点
+```c
+ZIPLIST_TAIL_OFFSET(zl) = intrev32ifbe(intrev32ifbe(ZIPLIST_TAIL_OFFSET(zl))+reqlen);
+assert(zipEntrySafe(zl, newlen, p+reqlen, &tail, 1));
+if (p[reqlen+tail.headersize+tail.len] != ZIP_END) {
+   ZIPLIST_TAIL_OFFSET(zl) = intrev32ifbe(intrev32ifbe(ZIPLIST_TAIL_OFFSET(zl))+nextdiff);
+}
+```
 
 ## 删除元素
 
