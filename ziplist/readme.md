@@ -352,8 +352,9 @@ unsigned char *ziplistDelete(unsigned char *zl, unsigned char **p) {
 2. 数据复制。
 3. 重新分配空间。
 
-### 计算待删除元素的总长度
+### 1. 计算待删除元素的总长度
 
+计算长度的函数`zipRawEntryLengthSafe`之前已经讲过。将需要删除的元素解密之后，计算需要删除的第num个元素的长度。
 
 ```c
 zipEntry(p, &first); 
@@ -361,13 +362,15 @@ for (i = 0; p[0] != ZIP_END && i < num; i++) {
     p += zipRawEntryLengthSafe(zl, zlbytes, p);
     deleted++;
 }
+totlen = p-first.p;
 ```
 
+### 2. 数据复制
+在上一步之后，first和p之间的数据就是需要删除的，其中first指向第一个需要删除的节点，p指向最后一个需要保留
+第一个节点或者列表尾。
 
-### 数据复制
 
-
-### 重新分配空间
+### 3. 重新分配空间
 
 
 ## 遍历元素
