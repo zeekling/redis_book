@@ -331,6 +331,44 @@ if (p[reqlen+tail.headersize+tail.len] != ZIP_END) {
 
 ## 删除元素
 
+压缩列表的函数定定义如下，返回值为删除元素之后压缩列表的首地址，接口入参如下：
+- zl: 压缩列表的首地址。
+- p: 待删除的元素的首地址。
+
+```c
+unsigned char *ziplistDelete(unsigned char *zl, unsigned char **p)
+```
+函数`ziplistDelete`只是简单调用了`__ziplistDelete`函数实现，其中num表示需要删除的元素数目，包含元素p。
+```c
+unsigned char *ziplistDelete(unsigned char *zl, unsigned char **p) {
+    size_t offset = *p-zl;
+    zl = __ziplistDelete(zl,*p,1);
+    *p = zl+offset;
+    return zl;
+}
+```
+删除元素需要是三个步骤：
+1. 计算待删除元素的总长度。
+2. 数据复制。
+3. 重新分配空间。
+
+### 计算待删除元素的总长度
+
+
+```c
+zipEntry(p, &first); 
+for (i = 0; p[0] != ZIP_END && i < num; i++) {
+    p += zipRawEntryLengthSafe(zl, zlbytes, p);
+    deleted++;
+}
+```
+
+
+### 数据复制
+
+
+### 重新分配空间
+
 
 ## 遍历元素
 
