@@ -370,6 +370,55 @@ totlen = p-first.p;
 第一个节点或者列表尾。
 
 
+#### 删除节点为中间节点
+
+当删除节点为中间节点时，在删除当前节点之后，后面节点的prevlen存储可能不够。p指向的后面节点需要判断是否有
+足够的prevlen是否够。因为是删除节点，包含删除 first 节点，这里删除的空间是肯定够 p 节点 prevlenSize 扩展的
+将 p 向后移动 nextdiff 差值的长度，减少需要删除的内存，用来扩展第一个节点（都删除后的）的 prevlen。
+
+```c
+nextdiff = zipPrevLenByteDiff(p,first.prevrawlen);
+p -= nextdiff;
+```
+
+将 first 的前一个节点的长度编码扩展到 p 当前的位置。
+
+```c
+zipStorePrevEntryLength(p,first.prevrawlen);
+```
+
+更新列表末尾的偏移量，原本的 减去 所有被删除的内存。
+
+```c
+set_tail = intrev32ifbe(ZIPLIST_TAIL_OFFSET(zl))-totlen;
+```
+
+如果被删除节点后有多于一个节点，那么需要将 nextdiff 也计算到表尾偏移量中。因为当前 p 指向的不是尾节点，
+因此要加上 nextdiff 才能让表尾偏移量正确。
+
+```c
+if (p[tail.headersize+tail.len] != ZIP_END) {
+   set_tail = set_tail + nextdiff;
+}
+```
+
+末尾向前面移动数据，覆盖被删除节点。
+
+```c
+size_t bytes_to_move = zlbytes-(p-zl)-1;
+memmove(first.p,p,bytes_to_move);
+```
+
+#### 删除节点为末尾节点
+
+p[0] == ZIP_END 到达末尾，说明后面其实没有节点，无需移动内存,更新尾节点偏移量到前一个节点的地址，因为此时
+first 前一个节点是尾节点。
+
+```c
+set_tail = (first.p-zl)-first.prevrawlen;
+```
+
+
 ### 3. 重新分配空间
 
 
