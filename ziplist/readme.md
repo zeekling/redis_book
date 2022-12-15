@@ -397,18 +397,18 @@ set_tail = intrev32ifbe(ZIPLIST_TAIL_OFFSET(zl))-totlen;
 因此要加上 nextdiff 才能让表尾偏移量正确。
 
 ```c
+assert(zipEntrySafe(zl, zlbytes, p, &tail, 1));
 if (p[tail.headersize+tail.len] != ZIP_END) {
    set_tail = set_tail + nextdiff;
 }
 ```
 
-末尾向前面移动数据，覆盖被删除节点。
+数据复制： 末尾向前面移动数据，覆盖被删除节点。
 
 ```c
 size_t bytes_to_move = zlbytes-(p-zl)-1;
 memmove(first.p,p,bytes_to_move);
 ```
-
 #### 删除节点为末尾节点
 
 p[0] == ZIP_END 到达末尾，说明后面其实没有节点，无需移动内存,更新尾节点偏移量到前一个节点的地址，因为此时
@@ -418,9 +418,62 @@ first 前一个节点是尾节点。
 set_tail = (first.p-zl)-first.prevrawlen;
 ```
 
-
 ### 3. 重新分配空间
 
+重新分配空间与插入元素逻辑相似，代码如下：
+
+```c
+offset = first.p-zl;
+zlbytes -= totlen - nextdiff;
+zl = ziplistResize(zl, zlbytes);
+p = zl+offset;
+```
 
 ## 遍历元素
+
+压缩列表遍历分为前向(从头到尾)和后向遍历(从尾到头)。前向遍历的API定义如下：
+
+- zl: 压缩列表的首地址。
+- p: 为需要查找的字符串的首地址。
+- 返回p的前一个节点。
+
+```c
+unsigned char *ziplistPrev(unsigned char *zl, unsigned char *p)
+```
+
+后向遍历的API定义如下：
+
+```c
+unsigned char *ziplistNext(unsigned char *zl, unsigned char *p) 
+```
+
+
+### 前向遍历
+
+如果`p[0]==ZIP_END`，则说明前一个节点是压缩列表的尾节点。
+
+如果`p == ZIPLIST_ENTRY_HEAD(zl)` 说明p是压缩列表的第一个节点，前一个节点为NULL。
+
+
+```c
+unsigned char *ziplistPrev(unsigned char *zl, unsigned char *p) {
+    unsigned int prevlensize, prevlen = 0;
+    if (p[0] == ZIP_END) {
+        p = ZIPLIST_ENTRY_TAIL(zl);
+        return (p[0] == ZIP_END) ? NULL : p;
+    } else if (p == ZIPLIST_ENTRY_HEAD(zl)) {
+        return NULL;
+    } else {
+        ZIP_DECODE_PREVLEN(p, prevlensize, prevlen);
+        assert(prevlen > 0);
+        p-=prevlen;
+        size_t zlbytes = intrev32ifbe(ZIPLIST_BYTES(zl));
+        zipAssertValidEntry(zl, zlbytes, p);
+        return p;
+    }
+}
+```
+
+### 后向遍历
+
 
