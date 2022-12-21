@@ -352,8 +352,9 @@ unsigned char *ziplistDelete(unsigned char *zl, unsigned char **p) {
 2. 数据复制。
 3. 重新分配空间。
 
-### 计算待删除元素的总长度
+### 1. 计算待删除元素的总长度
 
+计算长度的函数`zipRawEntryLengthSafe`之前已经讲过。将需要删除的元素解密之后，计算需要删除的第num个元素的长度。
 
 ```c
 zipEntry(p, &first); 
@@ -361,14 +362,118 @@ for (i = 0; p[0] != ZIP_END && i < num; i++) {
     p += zipRawEntryLengthSafe(zl, zlbytes, p);
     deleted++;
 }
+totlen = p-first.p;
+```
+
+### 2. 数据复制
+在上一步之后，first和p之间的数据就是需要删除的，其中first指向第一个需要删除的节点，p指向最后一个需要保留
+第一个节点或者列表尾。
+
+
+#### 删除节点为中间节点
+
+当删除节点为中间节点时，在删除当前节点之后，后面节点的prevlen存储可能不够。p指向的后面节点需要判断是否有
+足够的prevlen是否够。因为是删除节点，包含删除 first 节点，这里删除的空间是肯定够 p 节点 prevlenSize 扩展的
+将 p 向后移动 nextdiff 差值的长度，减少需要删除的内存，用来扩展第一个节点（都删除后的）的 prevlen。
+
+```c
+nextdiff = zipPrevLenByteDiff(p,first.prevrawlen);
+p -= nextdiff;
+```
+
+将 first 的前一个节点的长度编码扩展到 p 当前的位置。
+
+```c
+zipStorePrevEntryLength(p,first.prevrawlen);
+```
+
+更新列表末尾的偏移量，原本的 减去 所有被删除的内存。
+
+```c
+set_tail = intrev32ifbe(ZIPLIST_TAIL_OFFSET(zl))-totlen;
+```
+
+如果被删除节点后有多于一个节点，那么需要将 nextdiff 也计算到表尾偏移量中。因为当前 p 指向的不是尾节点，
+因此要加上 nextdiff 才能让表尾偏移量正确。
+
+```c
+assert(zipEntrySafe(zl, zlbytes, p, &tail, 1));
+if (p[tail.headersize+tail.len] != ZIP_END) {
+   set_tail = set_tail + nextdiff;
+}
+```
+
+数据复制： 末尾向前面移动数据，覆盖被删除节点。
+
+```c
+size_t bytes_to_move = zlbytes-(p-zl)-1;
+memmove(first.p,p,bytes_to_move);
+```
+#### 删除节点为末尾节点
+
+p[0] == ZIP_END 到达末尾，说明后面其实没有节点，无需移动内存,更新尾节点偏移量到前一个节点的地址，因为此时
+first 前一个节点是尾节点。
+
+```c
+set_tail = (first.p-zl)-first.prevrawlen;
+```
+
+### 3. 重新分配空间
+
+重新分配空间与插入元素逻辑相似，代码如下：
+
+```c
+offset = first.p-zl;
+zlbytes -= totlen - nextdiff;
+zl = ziplistResize(zl, zlbytes);
+p = zl+offset;
+```
+
+## 遍历元素
+
+压缩列表遍历分为前向(从头到尾)和后向遍历(从尾到头)。前向遍历的API定义如下：
+
+- zl: 压缩列表的首地址。
+- p: 为需要查找的字符串的首地址。
+- 返回p的前一个节点。
+
+```c
+unsigned char *ziplistPrev(unsigned char *zl, unsigned char *p)
+```
+
+后向遍历的API定义如下：
+
+```c
+unsigned char *ziplistNext(unsigned char *zl, unsigned char *p) 
 ```
 
 
-### 数据复制
+### 前向遍历
+
+如果`p[0]==ZIP_END`，则说明前一个节点是压缩列表的尾节点。
+
+如果`p == ZIPLIST_ENTRY_HEAD(zl)` 说明p是压缩列表的第一个节点，前一个节点为NULL。
 
 
-### 重新分配空间
+```c
+unsigned char *ziplistPrev(unsigned char *zl, unsigned char *p) {
+    unsigned int prevlensize, prevlen = 0;
+    if (p[0] == ZIP_END) {
+        p = ZIPLIST_ENTRY_TAIL(zl);
+        return (p[0] == ZIP_END) ? NULL : p;
+    } else if (p == ZIPLIST_ENTRY_HEAD(zl)) {
+        return NULL;
+    } else {
+        ZIP_DECODE_PREVLEN(p, prevlensize, prevlen);
+        assert(prevlen > 0);
+        p-=prevlen;
+        size_t zlbytes = intrev32ifbe(ZIPLIST_BYTES(zl));
+        zipAssertValidEntry(zl, zlbytes, p);
+        return p;
+    }
+}
+```
 
+### 后向遍历
 
-## 遍历元素
 
