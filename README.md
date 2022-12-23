@@ -14,6 +14,7 @@
 - [动态字符串](sds)
 - [跳跃表](skiplist/readme.md)
 - [压缩表](ziplist/readme.md)
+- [字典](dict/README.md)
 
 
 ## 特别感谢
