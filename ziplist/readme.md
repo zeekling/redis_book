@@ -450,10 +450,11 @@ unsigned char *ziplistNext(unsigned char *zl, unsigned char *p)
 
 ### 前向遍历
 
-如果`p[0]==ZIP_END`，则说明前一个节点是压缩列表的尾节点。
+- 如果`p[0]==ZIP_END`，则说明前一个节点是压缩列表的尾节点。
 
-如果`p == ZIPLIST_ENTRY_HEAD(zl)` 说明p是压缩列表的第一个节点，前一个节点为NULL。
+- 如果`p == ZIPLIST_ENTRY_HEAD(zl)` 说明p是压缩列表的第一个节点，前一个节点为NULL。
 
+- 如果是查找的是中间节点，需要解析出 prevlen 往前进行偏移，然后解析出对应节点。
 
 ```c
 unsigned char *ziplistPrev(unsigned char *zl, unsigned char *p) {
@@ -475,5 +476,27 @@ unsigned char *ziplistPrev(unsigned char *zl, unsigned char *p) {
 ```
 
 ### 后向遍历
+
+- 如果`p[0] == ZIP_END`，则表示当前ziplist为空，范围NULL。
+- 在 p 当前节点的基础上，往后偏移 p 节点的字节长度，即指向下一个节点。如果之后的 p 指向 ZIP_END 说明已经达到 ziplist 尾部，没有下一个节点
+
+```c
+unsigned char *ziplistNext(unsigned char *zl, unsigned char *p) {
+    ((void) zl);
+    size_t zlbytes = intrev32ifbe(ZIPLIST_BYTES(zl));
+
+    if (p[0] == ZIP_END) {
+        return NULL;
+    }
+
+    p += zipRawEntryLength(p);
+    if (p[0] == ZIP_END) {
+        return NULL;
+    }
+
+    zipAssertValidEntry(zl, zlbytes, p);
+    return p;
+}
+```
 
 
