@@ -17,7 +17,17 @@ uint64_t dictGenHashFunction(const void *key, size_t len) {
 
 ## hash冲突
 
-Redis使用hash结构保存数据，那么无法忽略的一个问题就是hash冲突。
+Redis使用hash结构保存数据，那么无法忽略的一个问题就是hash冲突。和hashmap一样，在键冲突的K-V串联成一个
+list列表，如下图所示:
+
+![pic](./dict0001.png)
+
+
+一般情况下，根据键查找值分为两步：
+
+- 键通过计算hash值获取索引值，根据索引值找到对应的元素。
+- 判断元素中的键与查找的键是否相等，相等则返回值，否则继续判断下一个元素。
+
 
 
 # 基本操作
